@@ -26,6 +26,8 @@ describe("members", () => {
     expect(member).toMatchObject({ name: "Ana", role: "admin" });
     expect(await getMember(db, member.id)).toEqual(member);
     expect(await getMemberByEmail(db, "ana@example.com")).toEqual(member);
+    expect(await getMemberByEmail(db, "ANA@EXAMPLE.COM")).toEqual(member);
+    expect(await getMemberByEmail(db, "unknown@example.com")).toBeNull();
   });
 
   test("getMember returns null for an unknown id", async () => {

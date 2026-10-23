@@ -1,9 +1,7 @@
-// What every tRPC procedure receives as `ctx`: the services, built on this
-// request's D1 binding, and who is calling. There is no sign-in yet, so
-// `userId` is always null and every `protectedProcedure` answers UNAUTHORIZED.
-// Team procedures take the acting member's id as input instead.
 import { env } from "cloudflare:workers";
+import { createClerkClient } from "@clerk/backend";
 import type { Database } from "@repo/db";
+import { getMemberByEmail } from "@repo/db/members";
 import { createAnnouncementsService } from "@repo/services/announcements";
 import { createAvailabilityService } from "@repo/services/availability";
 import { createBookingsService } from "@repo/services/bookings";
@@ -11,8 +9,8 @@ import { createMembersService } from "@repo/services/members";
 import { createNotesService } from "@repo/services/notes";
 import { createRoomsService } from "@repo/services/rooms";
 import { createTasksService } from "@repo/services/tasks";
+import { getRequest } from "@tanstack/react-start/server";
 import { drizzle } from "drizzle-orm/d1";
-import type { Context as HonoContext } from "hono";
 
 const createServices = (db: Database) => ({
   announcements: createAnnouncementsService(db),
@@ -24,26 +22,61 @@ const createServices = (db: Database) => ({
   tasks: createTasksService(db),
 });
 
-// A type, not an interface: see the biome-ignore. Over HTTP,
-// @hono/trpc-server also adds `env` to ctx, but the SSR path does not, so
-// procedures use `ctx.services` and never `ctx.env`.
-// biome-ignore lint/style/useConsistentTypeDefinitions: @hono/trpc-server needs a Record<string, unknown>, which an interface is not
+// biome-ignore lint/style/useConsistentTypeDefinitions: @hono/trpc-server requires a Record
 export type Context = {
   services: ReturnType<typeof createServices>;
-  /** Signed-in user, or null for anonymous callers. */
   userId: string | null;
+  getVerifiedEmail: (userId: string) => Promise<string | null>;
+  findMemberByEmail: (email: string) => ReturnType<typeof getMemberByEmail>;
 };
 
-const createContext = (bindings: Env, userId: string | null): Context => ({
-  services: createServices(drizzle(bindings.DB)),
-  userId,
-});
+async function createContext(
+  bindings: Env,
+  request: Request,
+  onAuthHeaders?: (headers: Headers) => void
+): Promise<Context> {
+  const client = createClerkClient({
+    publishableKey: bindings.CLERK_PUBLISHABLE_KEY,
+    secretKey: bindings.CLERK_SECRET_KEY,
+  });
+  const state = await client.authenticateRequest(request, {
+    acceptsToken: "session_token",
+    authorizedParties: [new URL(request.url).origin],
+  });
+  onAuthHeaders?.(state.headers);
+  const db = drizzle(bindings.DB);
+  return {
+    findMemberByEmail: (email) => getMemberByEmail(db, email),
+    getVerifiedEmail: async (userId) => {
+      const user = await client.users.getUser(userId);
+      const primary = user.emailAddresses.find(
+        (address) => address.id === user.primaryEmailAddressId
+      );
+      return primary?.verification?.status === "verified"
+        ? primary.emailAddress
+        : null;
+    },
+    services: createServices(db),
+    userId: state.isAuthenticated ? state.toAuth().userId : null,
+  };
+}
 
-/** Calls over HTTP: /api/trpc, mounted in src/server.ts. */
 export const createHonoContext = (
-  c: HonoContext<{ Bindings: Env }>
-): Promise<Context> => Promise.resolve(createContext(c.env, null));
+  bindings: Env,
+  request: Request,
+  responseHeaders: Headers
+) =>
+  createContext(bindings, request, (headers) => {
+    // Hono merges responseHeaders into the tRPC response. Keep each refreshed
+    // Clerk session cookie separate so the browser receives all of them.
+    for (const cookie of headers.getSetCookie()) {
+      responseHeaders.append("Set-Cookie", cookie);
+    }
+    headers.forEach((value, key) => {
+      if (key !== "set-cookie") {
+        responseHeaders.append(key, value);
+      }
+    });
+  });
 
-/** In-process calls from route loaders during SSR (src/integrations/trpc). */
-export const createSsrContext = (): Promise<Context> =>
-  Promise.resolve(createContext(env, null));
+export const createSsrContext = () => createContext(env, getRequest());

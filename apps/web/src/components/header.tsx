@@ -1,7 +1,11 @@
+import { SignInButton, UserButton } from "@clerk/tanstack-react-start";
 import { Link } from "@tanstack/react-router";
+import { Button } from "#/components/ui/button";
+import { useCurrentMember } from "#/hooks/use-current-member";
 import ThemeToggle from "./theme-toggle";
 
 export default function Header() {
+  const { member, signedIn } = useCurrentMember();
   return (
     <header className="sticky top-0 z-50 border-border border-b bg-background/90 px-4 backdrop-blur-lg">
       <nav className="page-wrap flex flex-wrap items-center gap-x-3 gap-y-2 py-3 sm:py-4">
@@ -76,6 +80,18 @@ export default function Header() {
         </div>
 
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          {signedIn ? (
+            <>
+              {member ? <span className="text-sm">{member.name}</span> : null}
+              <UserButton />
+            </>
+          ) : (
+            <SignInButton mode="modal">
+              <Button size="sm" variant="outline">
+                Sign in
+              </Button>
+            </SignInButton>
+          )}
           <ThemeToggle />
         </div>
       </nav>

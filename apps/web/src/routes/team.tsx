@@ -7,7 +7,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, useCallback, useMemo } from "react";
 import AnnouncementList from "#/components/announcement-list";
 import FormError from "#/components/form-error";
-import MemberPicker from "#/components/member-picker";
+import MemberNotice from "#/components/member-notice";
 import PageError from "#/components/page-error";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
@@ -16,8 +16,8 @@ import {
   NativeSelectOption,
 } from "#/components/ui/native-select";
 import { Textarea } from "#/components/ui/textarea";
-import { useActingMember } from "#/hooks/use-acting-member";
 import { useAction } from "#/hooks/use-action";
+import { useCurrentMember } from "#/hooks/use-current-member";
 import { getTrpc } from "#/integrations/trpc/client";
 import { formatUtc } from "#/lib/datetime";
 
@@ -36,10 +36,15 @@ export const Route = createFileRoute("/team")({
 
 function TeamPage() {
   const { announcements, members } = Route.useLoaderData();
-  const { actingMember, setActingMemberId } = useActingMember(members);
+  const {
+    member: currentMember,
+    canMutate,
+    unknownMember,
+    memberLookupFailed,
+    retryMemberLookup,
+  } = useCurrentMember();
   const addMember = useAction();
   const postAnnouncement = useAction();
-  const actorId = actingMember?.id ?? "";
 
   const memberNames = useMemo(
     () => new Map(members.map((member) => [member.id, member.name])),
@@ -53,7 +58,6 @@ function TeamPage() {
       const data = new FormData(form);
       const ok = await addMember.run(() =>
         getTrpc().members.add.mutate({
-          actorId,
           member: {
             email: String(data.get("email") ?? ""),
             name: String(data.get("name") ?? ""),
@@ -67,7 +71,7 @@ function TeamPage() {
         form.reset();
       }
     },
-    [actorId, addMember.run]
+    [addMember.run]
   );
 
   const handlePost = useCallback(
@@ -78,7 +82,6 @@ function TeamPage() {
       const expires = String(data.get("expiresAt") ?? "");
       const ok = await postAnnouncement.run(() =>
         getTrpc().announcements.post.mutate({
-          actorId,
           announcement: {
             body: String(data.get("body") ?? ""),
             expiresAt: expires ? new Date(expires).toISOString() : undefined,
@@ -89,7 +92,7 @@ function TeamPage() {
         form.reset();
       }
     },
-    [actorId, postAnnouncement.run]
+    [postAnnouncement.run]
   );
 
   return (
@@ -102,13 +105,11 @@ function TeamPage() {
         <p className="m-0 text-base text-muted-foreground leading-8">
           Who is on the team and what they need to know.
         </p>
-        <MemberPicker
-          members={members}
-          onChange={setActingMemberId}
-          value={actingMember?.id}
-        />
       </section>
 
+      {unknownMember || memberLookupFailed ? (
+        <MemberNotice failed={memberLookupFailed} onRetry={retryMemberLookup} />
+      ) : null}
       <section className="mt-10">
         <h2 className="mb-4 font-heading text-2xl text-foreground">Members</h2>
         <ul className="m-0 list-none space-y-4 p-0">
@@ -123,7 +124,7 @@ function TeamPage() {
           ))}
         </ul>
 
-        {actingMember?.role === "admin" ? (
+        {currentMember?.role === "admin" ? (
           <form
             className="island-shell mt-6 p-6 sm:p-8"
             onSubmit={handleAddMember}
@@ -164,40 +165,42 @@ function TeamPage() {
         <h2 className="mb-4 font-heading text-2xl text-foreground">
           Announcements
         </h2>
-        <form className="island-shell mb-6 p-6 sm:p-8" onSubmit={handlePost}>
-          <label
-            className="island-kicker mb-3 block"
-            htmlFor="announcement-body"
-          >
-            Post an announcement
-          </label>
-          <Textarea
-            id="announcement-body"
-            maxLength={ANNOUNCEMENT_BODY_MAX_LENGTH}
-            name="body"
-            required
-          />
-          <label
-            className="mt-3 block text-foreground text-sm"
-            htmlFor="announcement-expires"
-          >
-            Expires (optional)
-          </label>
-          <Input
-            className="mt-1"
-            id="announcement-expires"
-            name="expiresAt"
-            type="datetime-local"
-          />
-          <Button
-            className="mt-3"
-            disabled={postAnnouncement.pending}
-            type="submit"
-          >
-            {postAnnouncement.pending ? "Posting…" : "Post"}
-          </Button>
-          <FormError message={postAnnouncement.error} />
-        </form>
+        {canMutate ? (
+          <form className="island-shell mb-6 p-6 sm:p-8" onSubmit={handlePost}>
+            <label
+              className="island-kicker mb-3 block"
+              htmlFor="announcement-body"
+            >
+              Post an announcement
+            </label>
+            <Textarea
+              id="announcement-body"
+              maxLength={ANNOUNCEMENT_BODY_MAX_LENGTH}
+              name="body"
+              required
+            />
+            <label
+              className="mt-3 block text-foreground text-sm"
+              htmlFor="announcement-expires"
+            >
+              Expires (optional)
+            </label>
+            <Input
+              className="mt-1"
+              id="announcement-expires"
+              name="expiresAt"
+              type="datetime-local"
+            />
+            <Button
+              className="mt-3"
+              disabled={postAnnouncement.pending}
+              type="submit"
+            >
+              {postAnnouncement.pending ? "Posting…" : "Post"}
+            </Button>
+            <FormError message={postAnnouncement.error} />
+          </form>
+        ) : null}
         <AnnouncementList
           announcements={announcements}
           memberNames={memberNames}

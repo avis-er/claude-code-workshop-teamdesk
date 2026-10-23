@@ -1,31 +1,30 @@
 import { createTaskInput } from "@repo/services/tasks";
 import { z } from "zod";
-import { publicProcedure, router } from "../init.ts";
+import { memberProcedure, publicProcedure, router } from "../init.ts";
 
 /** Today's date in UTC, YYYY-MM-DD. */
 const todayUtc = () => new Date().toISOString().slice(0, 10);
 
 export const tasksRouter = router({
-  assign: publicProcedure
+  assign: memberProcedure
     .input(
       z.object({
-        actorId: z.string(),
         assigneeId: z.string().nullable(),
         taskId: z.string(),
       })
     )
     .mutation(({ ctx, input }) =>
-      ctx.services.tasks.assign(input.actorId, input.taskId, input.assigneeId)
+      ctx.services.tasks.assign(ctx.member.id, input.taskId, input.assigneeId)
     ),
-  complete: publicProcedure
-    .input(z.object({ actorId: z.string(), taskId: z.string() }))
+  complete: memberProcedure
+    .input(z.object({ taskId: z.string() }))
     .mutation(({ ctx, input }) =>
-      ctx.services.tasks.complete(input.actorId, input.taskId)
+      ctx.services.tasks.complete(ctx.member.id, input.taskId)
     ),
-  create: publicProcedure
-    .input(z.object({ actorId: z.string(), task: createTaskInput }))
+  create: memberProcedure
+    .input(z.object({ task: createTaskInput }))
     .mutation(({ ctx, input }) =>
-      ctx.services.tasks.create(input.actorId, input.task, todayUtc())
+      ctx.services.tasks.create(ctx.member.id, input.task, todayUtc())
     ),
   list: publicProcedure
     .input(z.object({ assigneeId: z.string().optional() }).optional())

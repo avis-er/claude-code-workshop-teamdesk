@@ -2,34 +2,31 @@ import { ROOM_CAPACITY_MAX, ROOM_NAME_MAX_LENGTH } from "@repo/db/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, useCallback } from "react";
 import FormError from "#/components/form-error";
-import MemberPicker from "#/components/member-picker";
+import MemberNotice from "#/components/member-notice";
 import PageError from "#/components/page-error";
 import RoomList from "#/components/room-list";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
-import { useActingMember } from "#/hooks/use-acting-member";
 import { useAction } from "#/hooks/use-action";
+import { useCurrentMember } from "#/hooks/use-current-member";
 import { getTrpc } from "#/integrations/trpc/client";
 
 export const Route = createFileRoute("/rooms")({
   loader: async () => {
     const trpc = getTrpc();
-    const [members, rooms] = await Promise.all([
-      trpc.members.list.query(),
-      trpc.rooms.list.query(),
-    ]);
-    return { members, rooms };
+    const rooms = await trpc.rooms.list.query();
+    return { rooms };
   },
   component: RoomsPage,
   errorComponent: PageError,
 });
 
 function RoomsPage() {
-  const { members, rooms } = Route.useLoaderData();
-  const { actingMember, setActingMemberId } = useActingMember(members);
+  const { rooms } = Route.useLoaderData();
+  const { canMutate, unknownMember, memberLookupFailed, retryMemberLookup } =
+    useCurrentMember();
   const addRoom = useAction();
   const archiveRoom = useAction();
-  const actorId = actingMember?.id ?? "";
 
   const handleAdd = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -38,7 +35,6 @@ function RoomsPage() {
       const data = new FormData(form);
       const ok = await addRoom.run(() =>
         getTrpc().rooms.add.mutate({
-          actorId,
           room: {
             capacity: Number(data.get("capacity")),
             name: String(data.get("name") ?? ""),
@@ -49,15 +45,13 @@ function RoomsPage() {
         form.reset();
       }
     },
-    [actorId, addRoom.run]
+    [addRoom.run]
   );
 
   const handleArchive = useCallback(
     (roomId: string) =>
-      archiveRoom.run(() =>
-        getTrpc().rooms.archive.mutate({ actorId, roomId })
-      ),
-    [actorId, archiveRoom.run]
+      archiveRoom.run(() => getTrpc().rooms.archive.mutate({ roomId })),
+    [archiveRoom.run]
   );
 
   return (
@@ -70,43 +64,43 @@ function RoomsPage() {
         <p className="m-0 text-base text-muted-foreground leading-8">
           The rooms the team can book. Only admins can add or archive them.
         </p>
-        <MemberPicker
-          members={members}
-          onChange={setActingMemberId}
-          value={actingMember?.id}
-        />
       </section>
 
-      <form className="island-shell mt-10 p-6 sm:p-8" onSubmit={handleAdd}>
-        <p className="island-kicker mb-3">Add room</p>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Input
-            aria-label="Room name"
-            maxLength={ROOM_NAME_MAX_LENGTH}
-            name="name"
-            placeholder="Room name"
-            required
-          />
-          <Input
-            aria-label="Capacity"
-            max={ROOM_CAPACITY_MAX}
-            min={1}
-            name="capacity"
-            placeholder="Capacity"
-            required
-            type="number"
-          />
-          <Button disabled={addRoom.pending} type="submit">
-            {addRoom.pending ? "Adding…" : "Add room"}
-          </Button>
-        </div>
-        <FormError message={addRoom.error} />
-      </form>
+      {unknownMember || memberLookupFailed ? (
+        <MemberNotice failed={memberLookupFailed} onRetry={retryMemberLookup} />
+      ) : null}
+      {canMutate ? (
+        <form className="island-shell mt-10 p-6 sm:p-8" onSubmit={handleAdd}>
+          <p className="island-kicker mb-3">Add room</p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Input
+              aria-label="Room name"
+              maxLength={ROOM_NAME_MAX_LENGTH}
+              name="name"
+              placeholder="Room name"
+              required
+            />
+            <Input
+              aria-label="Capacity"
+              max={ROOM_CAPACITY_MAX}
+              min={1}
+              name="capacity"
+              placeholder="Capacity"
+              required
+              type="number"
+            />
+            <Button disabled={addRoom.pending} type="submit">
+              {addRoom.pending ? "Adding…" : "Add room"}
+            </Button>
+          </div>
+          <FormError message={addRoom.error} />
+        </form>
+      ) : null}
 
       <section className="mt-10">
         <FormError message={archiveRoom.error} />
         <RoomList
-          disabled={archiveRoom.pending}
+          disabled={!canMutate || archiveRoom.pending}
           onArchive={handleArchive}
           rooms={rooms}
         />

@@ -5,8 +5,10 @@ import {
   useRouter,
 } from "@tanstack/react-router";
 import { type ChangeEvent, type FormEvent, useCallback, useState } from "react";
+import MemberNotice from "#/components/member-notice";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
+import { useCurrentMember } from "#/hooks/use-current-member";
 import { getTrpc } from "#/integrations/trpc/client";
 import { formatUtc } from "#/lib/datetime";
 
@@ -17,6 +19,8 @@ export const Route = createFileRoute("/notes")({
 });
 
 function NotesPage() {
+  const { canMutate, unknownMember, memberLookupFailed, retryMemberLookup } =
+    useCurrentMember();
   const notes = Route.useLoaderData();
   const router = useRouter();
   const [text, setText] = useState("");
@@ -60,29 +64,34 @@ function NotesPage() {
         </p>
       </section>
 
-      <form className="island-shell mt-10 p-6 sm:p-8" onSubmit={handleSubmit}>
-        <label className="island-kicker mb-3 block" htmlFor="note-text">
-          New note
-        </label>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Input
-            id="note-text"
-            maxLength={NOTE_TEXT_MAX_LENGTH}
-            onChange={handleTextChange}
-            placeholder="What's on your mind?"
-            required
-            value={text}
-          />
-          <Button disabled={saving || text.trim().length === 0} type="submit">
-            {saving ? "Saving…" : "Add note"}
-          </Button>
-        </div>
-        {error ? (
-          <p className="mt-3 text-destructive text-sm" role="alert">
-            {error}
-          </p>
-        ) : null}
-      </form>
+      {unknownMember || memberLookupFailed ? (
+        <MemberNotice failed={memberLookupFailed} onRetry={retryMemberLookup} />
+      ) : null}
+      {canMutate ? (
+        <form className="island-shell mt-10 p-6 sm:p-8" onSubmit={handleSubmit}>
+          <label className="island-kicker mb-3 block" htmlFor="note-text">
+            New note
+          </label>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Input
+              id="note-text"
+              maxLength={NOTE_TEXT_MAX_LENGTH}
+              onChange={handleTextChange}
+              placeholder="What's on your mind?"
+              required
+              value={text}
+            />
+            <Button disabled={saving || text.trim().length === 0} type="submit">
+              {saving ? "Saving…" : "Add note"}
+            </Button>
+          </div>
+          {error ? (
+            <p className="mt-3 text-destructive text-sm" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </form>
+      ) : null}
 
       <section className="mt-10">
         {notes.length === 0 ? (

@@ -1,23 +1,23 @@
 import { addRoomInput } from "@repo/services/rooms";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { publicProcedure, router } from "../init.ts";
+import { memberProcedure, publicProcedure, router } from "../init.ts";
 
 export const roomsRouter = router({
-  add: publicProcedure
-    .input(z.object({ actorId: z.string(), room: addRoomInput }))
+  add: memberProcedure
+    .input(z.object({ room: addRoomInput }))
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.services.rooms.add(input.actorId, input.room);
+      const result = await ctx.services.rooms.add(ctx.member.id, input.room);
       if (!result.ok) {
         throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
       }
       return result.room;
     }),
-  archive: publicProcedure
-    .input(z.object({ actorId: z.string(), roomId: z.string() }))
+  archive: memberProcedure
+    .input(z.object({ roomId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const result = await ctx.services.rooms.archive(
-        input.actorId,
+        ctx.member.id,
         input.roomId
       );
       if (!result.ok) {

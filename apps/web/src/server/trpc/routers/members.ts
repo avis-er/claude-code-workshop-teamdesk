@@ -1,25 +1,30 @@
 import { MEMBER_ROLES } from "@repo/db/shared";
 import { addMemberInput } from "@repo/services/members";
 import { z } from "zod";
-import { publicProcedure, router } from "../init.ts";
+import { memberProcedure, publicProcedure, router } from "../init.ts";
 
-// No sign-in yet: the acting member comes from the member picker in the UI.
 export const membersRouter = router({
-  add: publicProcedure
-    .input(z.object({ actorId: z.string(), member: addMemberInput }))
+  add: memberProcedure
+    .input(z.object({ member: addMemberInput }))
     .mutation(({ ctx, input }) =>
-      ctx.services.members.add(input.actorId, input.member)
+      ctx.services.members.add(ctx.member.id, input.member)
     ),
+  current: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.userId) {
+      return null;
+    }
+    const email = await ctx.getVerifiedEmail(ctx.userId);
+    return email ? ctx.findMemberByEmail(email) : null;
+  }),
   list: publicProcedure.query(({ ctx }) => ctx.services.members.list()),
-  setRole: publicProcedure
+  setRole: memberProcedure
     .input(
       z.object({
-        actorId: z.string(),
         memberId: z.string(),
         role: z.enum(MEMBER_ROLES),
       })
     )
     .mutation(({ ctx, input }) =>
-      ctx.services.members.setRole(input.actorId, input.memberId, input.role)
+      ctx.services.members.setRole(ctx.member.id, input.memberId, input.role)
     ),
 });

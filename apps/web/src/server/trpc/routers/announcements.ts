@@ -1,23 +1,19 @@
 import { postAnnouncementInput } from "@repo/services/announcements";
 import { z } from "zod";
-import { publicProcedure, router } from "../init.ts";
+import { memberProcedure, publicProcedure, router } from "../init.ts";
 
 export const announcementsRouter = router({
   latest: publicProcedure.query(({ ctx }) =>
     ctx.services.announcements.latest()
   ),
-  pin: publicProcedure
-    .input(
-      z.object({ actorId: z.string(), id: z.string(), pinned: z.boolean() })
-    )
+  pin: memberProcedure
+    .input(z.object({ id: z.string(), pinned: z.boolean() }))
     .mutation(({ ctx, input }) =>
-      ctx.services.announcements.pin(input.actorId, input.id, input.pinned)
+      ctx.services.announcements.pin(ctx.member.id, input.id, input.pinned)
     ),
-  post: publicProcedure
-    .input(
-      z.object({ actorId: z.string(), announcement: postAnnouncementInput })
-    )
+  post: memberProcedure
+    .input(z.object({ announcement: postAnnouncementInput }))
     .mutation(({ ctx, input }) =>
-      ctx.services.announcements.post(input.actorId, input.announcement)
+      ctx.services.announcements.post(ctx.member.id, input.announcement)
     ),
 });
