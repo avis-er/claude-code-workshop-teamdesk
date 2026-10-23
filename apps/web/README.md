@@ -63,7 +63,7 @@ bun run build     # vite build
 bun run deploy    # build + wrangler deploy
 ```
 
-Before deploy, configure the deployed domain and redirect URLs in the Clerk dashboard. Use the secret key from the same Clerk application as the publishable key in `wrangler.jsonc`.
+The checked-in `pk_test` key is for Clerk's development instance. For a production deployment, create a Clerk production instance and replace the publishable key in `wrangler.jsonc` and `src/routes/__root.tsx` with its `pk_live` key. Set `CLERK_SECRET_KEY` to that instance's matching secret with the command above. Configure the deployed domain and sign-in redirects in the Clerk dashboard before deploying.
 
 `wrangler.jsonc` has no `account_id` set, so `wrangler deploy`/`wrangler whoami` will use (or prompt for) whichever Cloudflare account is active.
 

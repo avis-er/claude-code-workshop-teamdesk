@@ -14,7 +14,7 @@ Copy `apps/web/.dev.vars.example` to `apps/web/.dev.vars` and replace the placeh
 
 Anyone can view pages. To make changes, sign in with Clerk using a primary verified email that matches a team member. The server resolves the acting member; signed-in users who are not members have read-only access.
 
-Before deploying, add the production domain to the Clerk application and set the Worker secret with `cd apps/web && bunx wrangler secret put CLERK_SECRET_KEY`. The Clerk publishable key is in `apps/web/wrangler.jsonc`. Configure the Clerk dashboard's allowed redirect URLs and domain for the deployed site.
+The checked-in `pk_test` publishable key is for Clerk's development instance. For production, create a Clerk production instance, replace the publishable key in `apps/web/wrangler.jsonc` and `apps/web/src/routes/__root.tsx` with its `pk_live` key, and set the matching Worker secret with `cd apps/web && bunx wrangler secret put CLERK_SECRET_KEY`. Configure the deployed domain and sign-in redirects in the Clerk dashboard before deploying.
 
 ## Layout
 
