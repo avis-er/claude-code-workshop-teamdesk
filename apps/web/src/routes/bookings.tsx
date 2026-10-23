@@ -12,15 +12,15 @@ import BookingForm, {
 } from "#/components/bookings/BookingForm";
 import BookingList from "#/components/bookings/BookingList";
 import FormError from "#/components/form-error";
-import MemberPicker from "#/components/member-picker";
+import MemberNotice from "#/components/member-notice";
 import PageError from "#/components/page-error";
 import { Input } from "#/components/ui/input";
 import {
   NativeSelect,
   NativeSelectOption,
 } from "#/components/ui/native-select";
-import { useActingMember } from "#/hooks/use-acting-member";
 import { useAction } from "#/hooks/use-action";
+import { useCurrentMember } from "#/hooks/use-current-member";
 import { getTrpc } from "#/integrations/trpc/client";
 import { todayUtc } from "#/lib/datetime";
 
@@ -67,10 +67,16 @@ export const Route = createFileRoute("/bookings")({
 function BookingsPage() {
   const { bookings, day, members, room, rooms } = Route.useLoaderData();
   const navigate = Route.useNavigate();
-  const { actingMember, setActingMemberId } = useActingMember(members);
+  const {
+    member: currentMember,
+    canMutate,
+    unknownMember,
+    memberLookupFailed,
+    retryMemberLookup,
+  } = useCurrentMember();
   const createBooking = useAction();
   const cancelBooking = useAction();
-  const actorId = actingMember?.id ?? "";
+  const memberId = currentMember?.id;
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
 
   const memberNames = useMemo(
@@ -82,14 +88,13 @@ function BookingsPage() {
     [rooms]
   );
 
-  // The acting member is only known in the browser, so their bookings load
-  // here rather than in the route loader.
   const loadUpcoming = useCallback(async () => {
-    if (!actorId) {
+    if (!memberId) {
+      setUpcoming([]);
       return;
     }
-    setUpcoming(await getTrpc().bookings.upcoming.query({ memberId: actorId }));
-  }, [actorId]);
+    setUpcoming(await getTrpc().bookings.upcoming.query({ memberId }));
+  }, [memberId]);
 
   useEffect(() => {
     loadUpcoming().catch(() => setUpcoming([]));
@@ -117,7 +122,6 @@ function BookingsPage() {
       }
       const ok = await createBooking.run(() =>
         getTrpc().bookings.create.mutate({
-          actorId,
           booking: { ...draft, roomId: room.id },
         })
       );
@@ -126,19 +130,19 @@ function BookingsPage() {
       }
       return ok;
     },
-    [actorId, createBooking.run, loadUpcoming, room]
+    [createBooking.run, loadUpcoming, room]
   );
 
   const handleCancel = useCallback(
     async (bookingId: string) => {
       const ok = await cancelBooking.run(() =>
-        getTrpc().bookings.cancel.mutate({ actorId, bookingId })
+        getTrpc().bookings.cancel.mutate({ bookingId })
       );
       if (ok) {
         await loadUpcoming();
       }
     },
-    [actorId, cancelBooking.run, loadUpcoming]
+    [cancelBooking.run, loadUpcoming]
   );
 
   const describeForRoom = useCallback(
@@ -164,13 +168,11 @@ function BookingsPage() {
           Pick a room and a day to see who has it, then book a slot. All times
           are UTC.
         </p>
-        <MemberPicker
-          members={members}
-          onChange={setActingMemberId}
-          value={actingMember?.id}
-        />
       </section>
 
+      {unknownMember || memberLookupFailed ? (
+        <MemberNotice failed={memberLookupFailed} onRetry={retryMemberLookup} />
+      ) : null}
       {room ? (
         <>
           <section className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -194,15 +196,17 @@ function BookingsPage() {
             />
           </section>
 
-          <div className="mt-6">
-            <BookingForm
-              capacity={room.capacity}
-              day={day}
-              error={createBooking.error}
-              onSubmit={handleCreate}
-              pending={createBooking.pending}
-            />
-          </div>
+          {canMutate ? (
+            <div className="mt-6">
+              <BookingForm
+                capacity={room.capacity}
+                day={day}
+                error={createBooking.error}
+                onSubmit={handleCreate}
+                pending={createBooking.pending}
+              />
+            </div>
+          ) : null}
 
           <section className="mt-10">
             <h2 className="mb-4 font-heading text-2xl text-foreground">
@@ -212,7 +216,7 @@ function BookingsPage() {
             <BookingList
               bookings={bookings}
               describe={describeForRoom}
-              disabled={cancelBooking.pending}
+              disabled={!canMutate || cancelBooking.pending}
               emptyText="Nothing booked yet."
               onCancel={handleCancel}
             />
@@ -231,7 +235,7 @@ function BookingsPage() {
         <BookingList
           bookings={upcoming}
           describe={describeUpcoming}
-          disabled={cancelBooking.pending}
+          disabled={!canMutate || cancelBooking.pending}
           emptyText="You have no upcoming bookings."
           onCancel={handleCancel}
         />

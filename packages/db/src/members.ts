@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { type Database, members } from "./schema.ts";
 import type { Member, MemberRole } from "./shared.ts";
 
@@ -39,7 +39,7 @@ export async function getMemberByEmail(
   const [row] = await db
     .select()
     .from(members)
-    .where(eq(members.email, email))
+    .where(sql`lower(${members.email}) = lower(${email})`)
     .limit(1);
   return row ? toMember(row) : null;
 }

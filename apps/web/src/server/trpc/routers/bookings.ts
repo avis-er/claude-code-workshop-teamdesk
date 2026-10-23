@@ -3,35 +3,34 @@ import {
   rescheduleBookingInput,
 } from "@repo/services/bookings";
 import { z } from "zod";
-import { publicProcedure, router } from "../init.ts";
+import { memberProcedure, publicProcedure, router } from "../init.ts";
 
 export const bookingsRouter = router({
-  cancel: publicProcedure
-    .input(z.object({ actorId: z.string(), bookingId: z.string() }))
+  cancel: memberProcedure
+    .input(z.object({ bookingId: z.string() }))
     .mutation(({ ctx, input }) =>
-      ctx.services.bookings.cancel(input.actorId, input.bookingId)
+      ctx.services.bookings.cancel(ctx.member.id, input.bookingId)
     ),
-  create: publicProcedure
-    .input(z.object({ actorId: z.string(), booking: createBookingInput }))
+  create: memberProcedure
+    .input(z.object({ booking: createBookingInput }))
     .mutation(({ ctx, input }) =>
-      ctx.services.bookings.create(input.actorId, input.booking)
+      ctx.services.bookings.create(ctx.member.id, input.booking)
     ),
   forRoom: publicProcedure
     .input(z.object({ day: z.iso.datetime(), roomId: z.string() }))
     .query(({ ctx, input }) =>
       ctx.services.bookings.listForRoom(input.roomId, input.day)
     ),
-  reschedule: publicProcedure
+  reschedule: memberProcedure
     .input(
       z.object({
-        actorId: z.string(),
         bookingId: z.string(),
         slot: rescheduleBookingInput,
       })
     )
     .mutation(({ ctx, input }) =>
       ctx.services.bookings.reschedule(
-        input.actorId,
+        ctx.member.id,
         input.bookingId,
         input.slot
       )

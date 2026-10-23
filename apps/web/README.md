@@ -2,7 +2,7 @@
 
 A [TanStack Start](https://tanstack.com/start) app deployed on Cloudflare Workers, with [Hono](https://hono.dev) as the top-level `fetch` handler and [Cloudflare D1](https://developers.cloudflare.com/d1/) for data.
 
-There is no sign-in. Team procedures take the acting member as `actorId` in their input.
+Clerk handles sign-in. The server verifies each request and matches the user's primary verified email to a team member. Public queries remain available to everyone. Mutations require a matching member; signed-in nonmembers are read-only.
 
 ## Architecture
 
@@ -16,8 +16,8 @@ There is no sign-in. Team procedures take the acting member as `actorId` in thei
 
 `src/server/trpc/` holds the API:
 
-- `context.ts` builds `ctx` for each call: the services from [`@repo/services`](../../packages/services) on this request's `drizzle(env.DB)`, and `userId`, the signed-in user or null. With no auth, `userId` is always null.
-- `init.ts` defines `publicProcedure` (anyone) and `protectedProcedure` (signed-in users only, 401 otherwise). Both map a thrown `ServiceError` from `@repo/services/errors` to the matching tRPC error (404, 409, 403, 400).
+- `context.ts` verifies the Clerk session and builds `ctx` with services on this request's `drizzle(env.DB)` and the signed-in user id or null.
+- `init.ts` defines `publicProcedure` (anyone), `protectedProcedure` (signed-in users), and `memberProcedure` (a signed-in user whose primary verified email matches a member). They map service errors to tRPC errors.
 - `router.ts` is the app router: one sub-router per area (`members`, `rooms`, `bookings`, `tasks`, `announcements`, `notes`) and `me` (protected, the example).
 - `routers/<name>.ts` holds one router per area. Keep them thin: an input schema from the service, then one service call.
 
@@ -41,7 +41,7 @@ bun install
 bun run dev
 ```
 
-The database needs no configuration for local work.
+Copy `.dev.vars.example` to `.dev.vars` and replace `sk_test_replace_me` with the Clerk secret key. The publishable key is already configured in `wrangler.jsonc`. Configure `http://localhost:3000` as an allowed development origin and redirect URL in the Clerk dashboard.
 
 ## Build & deploy
 
@@ -58,9 +58,12 @@ Without the demo data the deployed app has no members, so nobody can book. `bun 
 Then:
 
 ```bash
+cd apps/web && bunx wrangler secret put CLERK_SECRET_KEY
 bun run build     # vite build
 bun run deploy    # build + wrangler deploy
 ```
+
+The checked-in `pk_test` key is for Clerk's development instance. For a production deployment, create a Clerk production instance and replace the publishable key in `wrangler.jsonc` and `src/routes/__root.tsx` with its `pk_live` key. Set `CLERK_SECRET_KEY` to that instance's matching secret with the command above. Configure the deployed domain and sign-in redirects in the Clerk dashboard before deploying.
 
 `wrangler.jsonc` has no `account_id` set, so `wrangler deploy`/`wrangler whoami` will use (or prompt for) whichever Cloudflare account is active.
 

@@ -1,6 +1,7 @@
 import { ServiceError, type ServiceErrorCode } from "@repo/services/errors";
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { Context } from "./context.ts";
+import { resolveMember } from "./member.ts";
 
 const TRPC_CODES: Record<ServiceErrorCode, TRPCError["code"]> = {
   CONFLICT: "CONFLICT",
@@ -65,4 +66,13 @@ export const protectedProcedure = publicProcedure.use(({ ctx, next }) => {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({ ctx: { ...ctx, userId: ctx.userId } });
+});
+
+export const memberProcedure = publicProcedure.use(async ({ ctx, next }) => {
+  const member = await resolveMember(
+    ctx.userId,
+    ctx.getVerifiedEmail,
+    ctx.findMemberByEmail
+  );
+  return next({ ctx: { ...ctx, member } });
 });

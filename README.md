@@ -10,9 +10,11 @@ bun test
 bun run dev
 ```
 
-`bun run dev` applies the D1 migrations and the demo data (`packages/db/seed.sql`) to a local SQLite database and starts the app on http://localhost:3000. No Cloudflare account and no environment variables are needed. The local database lives in `apps/web/.wrangler`; delete that folder for a clean slate.
+Copy `apps/web/.dev.vars.example` to `apps/web/.dev.vars` and replace the placeholder with your Clerk secret key. `bun run dev` applies the D1 migrations and demo data (`packages/db/seed.sql`) to a local SQLite database and starts the app on http://localhost:3000. The local database lives in `apps/web/.wrangler`; delete that folder for a clean slate.
 
-There is no sign-in yet. Pages that change data have a member picker, and the chosen member is sent as `actorId` with every mutation.
+Anyone can view pages. To make changes, sign in with Clerk using a primary verified email that matches a team member. The server resolves the acting member; signed-in users who are not members have read-only access.
+
+The checked-in `pk_test` publishable key is for Clerk's development instance. For production, create a Clerk production instance, replace the publishable key in `apps/web/wrangler.jsonc` and `apps/web/src/routes/__root.tsx` with its `pk_live` key, and set the matching Worker secret with `cd apps/web && bunx wrangler secret put CLERK_SECRET_KEY`. Configure the deployed domain and sign-in redirects in the Clerk dashboard before deploying.
 
 ## Layout
 

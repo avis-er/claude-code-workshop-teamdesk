@@ -2,10 +2,13 @@ import { trpcServer } from "@hono/trpc-server";
 import handler from "@tanstack/react-start/server-entry";
 import { Hono } from "hono";
 import { csrf } from "hono/csrf";
-import { createHonoContext } from "./server/trpc/context.ts";
+import { type Context, createHonoContext } from "./server/trpc/context.ts";
 import { appRouter } from "./server/trpc/router.ts";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{
+  Bindings: Env;
+  Variables: { trpcContext: Context };
+}>();
 
 app.get("/api/health", (c) => c.json({ status: "ok" }));
 
@@ -16,10 +19,19 @@ app.get("/api/health", (c) => c.json({ status: "ok" }));
 // a CORS preflight that nothing here answers: adding cors() to these routes
 // would leave mutations open to CSRF.
 app.use("/api/trpc/*", csrf());
+app.use("/api/trpc/*", async (c, next) => {
+  const context = await createHonoContext(c.env, c.req.raw, c.res.headers);
+  const location = c.res.headers.get("Location");
+  if (location) {
+    return new Response(null, { headers: c.res.headers, status: 307 });
+  }
+  c.set("trpcContext", context);
+  await next();
+});
 app.use(
   "/api/trpc/*",
   trpcServer({
-    createContext: (_opts, c) => createHonoContext(c),
+    createContext: (_opts, c) => c.get("trpcContext"),
     endpoint: "/api/trpc",
     // Production clients only see "Internal server error" (see init.ts), so
     // the real error goes to the Worker logs.

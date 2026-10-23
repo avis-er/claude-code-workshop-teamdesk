@@ -1,5 +1,4 @@
-// Who is on the team. There is no sign-in yet, so every mutation elsewhere
-// takes the acting member's id and looks them up here.
+// Who is on the team. The router supplies the acting member's id to mutations.
 import type { Database } from "@repo/db";
 import {
   createMember,
