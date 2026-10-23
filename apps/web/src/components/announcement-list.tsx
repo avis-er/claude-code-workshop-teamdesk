@@ -30,6 +30,14 @@ export default function AnnouncementList({
             <time dateTime={announcement.createdAt}>
               {formatUtc(announcement.createdAt)}
             </time>
+            {announcement.expiresAt ? (
+              <>
+                {" · Expires "}
+                <time dateTime={announcement.expiresAt}>
+                  {formatUtc(announcement.expiresAt)}
+                </time>
+              </>
+            ) : null}
           </p>
         </li>
       ))}

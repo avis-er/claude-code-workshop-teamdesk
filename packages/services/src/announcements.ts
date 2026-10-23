@@ -9,8 +9,9 @@ import {
   type Announcement,
 } from "@repo/db/shared";
 import { z } from "zod";
-import { NotFoundError } from "./errors.ts";
+import { NotFoundError, ValidationError } from "./errors.ts";
 import { requireAdmin } from "./members.ts";
+import { toUtcIso } from "./time.ts";
 
 const LATEST_LIMIT = 10;
 
@@ -23,6 +24,7 @@ export const postAnnouncementInput = z.object({
       ANNOUNCEMENT_BODY_MAX_LENGTH,
       `Announcement must be at most ${ANNOUNCEMENT_BODY_MAX_LENGTH} characters.`
     ),
+  expiresAt: z.iso.datetime({ offset: true }).optional(),
   pinned: z.boolean().default(false),
 });
 
@@ -43,7 +45,7 @@ export interface AnnouncementsService {
 export const createAnnouncementsService = (
   db: Database
 ): AnnouncementsService => ({
-  latest: () => listAnnouncements(db, LATEST_LIMIT),
+  latest: () => listAnnouncements(db, LATEST_LIMIT, new Date().toISOString()),
   pin: async (actorId, id, pinned) => {
     await requireAdmin(db, actorId);
     const announcement = await setAnnouncementPinned(db, id, pinned);
@@ -55,6 +57,14 @@ export const createAnnouncementsService = (
   post: async (actorId, input) => {
     await requireAdmin(db, actorId);
     const data = postAnnouncementInput.parse(input);
-    return await insertAnnouncement(db, { ...data, authorId: actorId });
+    const expiresAt = data.expiresAt ? toUtcIso(data.expiresAt) : undefined;
+    if (expiresAt && expiresAt <= new Date().toISOString()) {
+      throw new ValidationError("Expiry must be in the future.");
+    }
+    return await insertAnnouncement(db, {
+      ...data,
+      authorId: actorId,
+      expiresAt,
+    });
   },
 });

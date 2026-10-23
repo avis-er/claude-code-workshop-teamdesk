@@ -75,10 +75,14 @@ function TeamPage() {
       event.preventDefault();
       const form = event.currentTarget;
       const data = new FormData(form);
+      const expires = String(data.get("expiresAt") ?? "");
       const ok = await postAnnouncement.run(() =>
         getTrpc().announcements.post.mutate({
           actorId,
-          announcement: { body: String(data.get("body") ?? "") },
+          announcement: {
+            body: String(data.get("body") ?? ""),
+            expiresAt: expires ? new Date(expires).toISOString() : undefined,
+          },
         })
       );
       if (ok) {
@@ -172,6 +176,18 @@ function TeamPage() {
             maxLength={ANNOUNCEMENT_BODY_MAX_LENGTH}
             name="body"
             required
+          />
+          <label
+            className="mt-3 block text-foreground text-sm"
+            htmlFor="announcement-expires"
+          >
+            Expires (optional)
+          </label>
+          <Input
+            className="mt-1"
+            id="announcement-expires"
+            name="expiresAt"
+            type="datetime-local"
           />
           <Button
             className="mt-3"

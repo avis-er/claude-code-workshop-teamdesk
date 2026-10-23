@@ -57,6 +57,7 @@ export interface Announcement {
   authorId: string;
   body: string;
   createdAt: string;
+  expiresAt: string | null;
   id: string;
   pinned: boolean;
 }

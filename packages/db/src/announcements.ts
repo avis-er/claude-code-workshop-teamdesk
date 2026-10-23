@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, gt, isNull, or } from "drizzle-orm";
 import { announcements, type Database } from "./schema.ts";
 import type { Announcement } from "./shared.ts";
 
@@ -9,6 +9,7 @@ function toAnnouncement(row: AnnouncementRow): Announcement {
     authorId: String(row.authorId),
     body: row.body,
     createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
     id: String(row.id),
     pinned: row.pinned === 1,
   };
@@ -17,11 +18,15 @@ function toAnnouncement(row: AnnouncementRow): Announcement {
 /** Pinned first, then newest first. */
 export async function listAnnouncements(
   db: Database,
-  limit: number
+  limit: number,
+  now: string
 ): Promise<Announcement[]> {
   const rows = await db
     .select()
     .from(announcements)
+    .where(
+      or(isNull(announcements.expiresAt), gt(announcements.expiresAt, now))
+    )
     .orderBy(desc(announcements.pinned), desc(announcements.id))
     .limit(limit);
   return rows.map(toAnnouncement);
@@ -29,7 +34,7 @@ export async function listAnnouncements(
 
 export async function insertAnnouncement(
   db: Database,
-  input: { authorId: string; body: string; pinned: boolean }
+  input: { authorId: string; body: string; expiresAt?: string; pinned: boolean }
 ): Promise<Announcement> {
   const [row] = await db
     .insert(announcements)
@@ -37,6 +42,7 @@ export async function insertAnnouncement(
       authorId: Number(input.authorId),
       body: input.body,
       createdAt: new Date().toISOString(),
+      expiresAt: input.expiresAt ?? null,
       pinned: input.pinned ? 1 : 0,
     })
     .returning();
