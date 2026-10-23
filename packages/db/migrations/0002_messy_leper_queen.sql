@@ -1,0 +1,1 @@
+ALTER TABLE `announcements` ADD `expires_at` text;

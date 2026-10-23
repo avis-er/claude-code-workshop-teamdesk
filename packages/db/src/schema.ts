@@ -95,6 +95,7 @@ export const announcements = sqliteTable("announcements", {
     .references(() => members.id),
   body: text("body").notNull(),
   createdAt: text("created_at").notNull(),
+  expiresAt: text("expires_at"),
   id: integer("id").primaryKey({ autoIncrement: true }),
   pinned: integer("pinned").notNull().default(0),
 });
